@@ -17,6 +17,7 @@ from mcp.server.fastmcp import FastMCP
 WORKER_URL = os.environ.get("BRIDGE_WORKER_URL", "").rstrip("/")
 API_KEY = os.environ.get("BRIDGE_API_KEY", "")
 MACHINE_ID = os.environ.get("BRIDGE_MACHINE_ID", "unknown")
+PROJECT = os.environ.get("BRIDGE_PROJECT", "")
 
 if not WORKER_URL:
     raise RuntimeError("BRIDGE_WORKER_URL environment variable is required")
@@ -57,7 +58,12 @@ async def send_message(content: str, tags: list[str] | None = None) -> dict:
         resp = await client.post(
             f"{WORKER_URL}/messages",
             headers=_headers(),
-            json={"content": content, "from": MACHINE_ID, "tags": tags or []},
+            json={
+                "content": content,
+                "from": MACHINE_ID,
+                "project": PROJECT or None,
+                "tags": tags or [],
+            },
             timeout=10,
         )
         resp.raise_for_status()
@@ -71,6 +77,7 @@ async def send_message(content: str, tags: list[str] | None = None) -> dict:
 async def read_messages(
     unread_only: bool = False,
     from_machine: str | None = None,
+    project: str | None = None,
     tag: str | None = None,
     limit: int = 20,
 ) -> dict:
@@ -79,6 +86,7 @@ async def read_messages(
     Args:
         unread_only: Only return unread messages
         from_machine: Filter by sender ("mac" or "pc")
+        project: Filter by project name
         tag: Filter by tag
         limit: Maximum number of messages to return (default 20)
     """
@@ -87,6 +95,8 @@ async def read_messages(
         params["unread"] = "true"
     if from_machine:
         params["from"] = from_machine
+    if project:
+        params["project"] = project
     if tag:
         params["tag"] = tag
 

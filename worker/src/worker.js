@@ -71,7 +71,7 @@ export default {
 
 async function handleSend(request, env) {
   const body = await request.json();
-  const { content, from, tags } = body;
+  const { content, from, tags, project } = body;
 
   if (!content || !from) {
     return json({ error: "content and from are required" }, 400);
@@ -80,14 +80,14 @@ async function handleSend(request, env) {
   const id = crypto.randomUUID();
   const timestamp = new Date().toISOString();
 
-  const message = { id, from, timestamp, content, tags: tags || [], read: false };
+  const message = { id, from, project: project || null, timestamp, content, tags: tags || [], read: false };
 
   // Store the message
   await env.MESSAGES.put(`msg:${id}`, JSON.stringify(message));
 
   // Update index
   const index = await getIndex(env);
-  index.push({ id, timestamp, from, read: false });
+  index.push({ id, timestamp, from, project: project || null, read: false });
   await env.MESSAGES.put("index", JSON.stringify(index));
 
   return json({ id, timestamp, status: "sent" }, 201);
@@ -97,6 +97,7 @@ async function handleList(url, env) {
   const unreadOnly = url.searchParams.get("unread") === "true";
   const fromFilter = url.searchParams.get("from");
   const tagFilter = url.searchParams.get("tag");
+  const projectFilter = url.searchParams.get("project");
   const limit = parseInt(url.searchParams.get("limit") || "50", 10);
   const since = url.searchParams.get("since");
 
@@ -105,6 +106,7 @@ async function handleList(url, env) {
   // Filter index
   if (unreadOnly) index = index.filter((e) => !e.read);
   if (fromFilter) index = index.filter((e) => e.from === fromFilter);
+  if (projectFilter) index = index.filter((e) => e.project === projectFilter);
   if (since) index = index.filter((e) => e.timestamp > since);
 
   // Most recent first, apply limit
