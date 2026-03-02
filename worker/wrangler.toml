@@ -1,4 +1,4 @@
-name = "fumi"
+name = "photon"
 main = "src/worker.js"
 compatibility_date = "2024-12-01"
 
@@ -8,4 +8,4 @@ compatibility_date = "2024-12-01"
 # KV namespace binding — create with: npx wrangler kv namespace create MESSAGES
 [[kv_namespaces]]
 binding = "MESSAGES"
-id = "your-kv-namespace-id"
+id = "c824e1ad7af64b95afc37b68d465063a"

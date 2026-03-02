@@ -1,5 +1,5 @@
 /**
- * Fumi (文) — Cloudflare Worker
+ * Photon — Cloudflare Worker
  *
  * Message relay between Claude Code instances on different machines.
  * Messages stored in Cloudflare KV. Auth via shared API key.

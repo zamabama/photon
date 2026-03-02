@@ -1,11 +1,11 @@
 """
-Fumi (文) — Message Bridge MCP Server
+Photon — Message Bridge MCP Server
 
 Gives Claude Code tools to send/read messages through the Cloudflare Worker.
 Runs on both Mac and PC. Machine identity set via BRIDGE_MACHINE_ID env var.
 
 Usage (stdio, via .mcp.json):
-    python3 tools/fumi/mcp_server.py
+    python3 tools/photon/mcp_server.py
 """
 
 import os
@@ -27,9 +27,9 @@ if not API_KEY:
 # --- MCP Server ---
 
 mcp = FastMCP(
-    name="fumi",
+    name="photon",
     instructions=(
-        "Fumi (文) — message bridge between Mac and PC Claude Code instances. "
+        "Photon — message bridge between Mac and PC Claude Code instances. "
         "Use check_messages at the start of each session to see if there are "
         "pending messages from the other machine."
     ),
