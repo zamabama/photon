@@ -230,7 +230,14 @@ async function handleClearAll(env) {
 // shows only the agents currently working a project. A per-agent `token`
 // distinguishes "me refreshing" from "a different agent claimed my label".
 
+// "Online" window: how recently a lane must have checked in to count as LIVE.
+// Drives collision detection + the send-time dead-lane guard.
 const PRESENCE_TTL_MS = 15 * 60 * 1000;
+// Registry retention: lanes are NOT deleted when they go idle — they persist
+// (flagged offline) so the roster is a PERMANENT directory of every lane that has
+// ever claimed an id. This is only a garbage-collection backstop so the map can't
+// grow without bound.
+const REGISTRY_TTL_MS = 90 * 24 * 60 * 60 * 1000; // 90 days
 
 function nowMs() {
   return Date.now();
@@ -246,8 +253,11 @@ async function getPresence(env, project) {
 }
 
 function pruneStale(map, now) {
+  // Keep the roster permanent: only garbage-collect lanes that have been totally
+  // silent for REGISTRY_TTL_MS. Idle-but-known lanes are retained and simply
+  // reported as offline by the lister.
   for (const [k, v] of Object.entries(map)) {
-    if (now - (v.last_seen || 0) >= PRESENCE_TTL_MS) delete map[k];
+    if (now - (v.last_seen || 0) >= REGISTRY_TTL_MS) delete map[k];
   }
 }
 
@@ -295,21 +305,33 @@ async function handleRegister(request, env) {
 
 async function handleListPresence(url, env) {
   const project = url.searchParams.get("project");
+  // all=true → the full PERMANENT roster (every registered lane, online or not).
+  // Default → only lanes live within PRESENCE_TTL_MS, preserving legacy behaviour
+  // for the send-time dead-lane guard and older clients (no version-skew regression).
+  const includeOffline = url.searchParams.get("all") === "true";
   const now = nowMs();
   const map = await getPresence(env, project);
 
   const identities = Object.values(map)
-    .filter((v) => now - (v.last_seen || 0) < PRESENCE_TTL_MS)
     .map((v) => ({
       identity: v.identity,
       workstream: v.workstream,
       description: v.description,
+      online: now - (v.last_seen || 0) < PRESENCE_TTL_MS,
       last_seen: new Date(v.last_seen).toISOString(),
       seconds_ago: Math.round((now - v.last_seen) / 1000),
     }))
-    .sort((a, b) => a.seconds_ago - b.seconds_ago);
+    .filter((v) => includeOffline || v.online)
+    // online first, then most-recently-seen
+    .sort((a, b) => (a.online === b.online ? a.seconds_ago - b.seconds_ago : a.online ? -1 : 1));
 
-  return json({ project: project || null, count: identities.length, identities });
+  const online_count = identities.filter((i) => i.online).length;
+  return json({
+    project: project || null,
+    count: identities.length,
+    online_count,
+    identities,
+  });
 }
 
 // --- Helpers ---

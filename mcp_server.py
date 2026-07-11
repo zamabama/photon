@@ -827,10 +827,13 @@ async def set_identity(workstream: str, description: str = "") -> dict:
 @mcp.tool(
     name="list_identities",
     description=(
-        "List the agents currently active on a project and the workstream sub-identities they've "
-        "claimed (the roster). Call this BEFORE set_identity to pick a free label, and before "
+        "List the roster of workstream sub-identities for a project — every lane that has EVER "
+        "claimed an id, each flagged `online` (checked in within the last 15 min) or offline. "
+        "Lanes persist permanently once claimed; an offline lane still queues mail but won't read "
+        "it until that chat reboots. Call this BEFORE set_identity to pick a free label, and before "
         "sending to a specific lane to find the right target (e.g. 'mac/primogen#website'). "
-        "Defaults to your own project; pass project= to inspect another project's roster."
+        "`online_count` = how many are live now. Defaults to your own project; pass project= to "
+        "inspect another project's roster."
     ),
 )
 async def list_identities(project: str | None = None) -> dict:
@@ -877,7 +880,7 @@ async def list_identities(project: str | None = None) -> dict:
             "directory": top["directory_name"],
         }
 
-    params: dict[str, str] = {}
+    params: dict[str, str] = {"all": "true"}  # full permanent roster (online + offline lanes)
     if target_project:
         params["project"] = target_project
 
