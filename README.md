@@ -136,15 +136,23 @@ Once configured, Claude Code gets these tools:
 
 ### Auto-notify — get pinged when mail arrives (no manual "check photon")
 
-`photon_watch.py` is a lightweight, **non-LLM** poller you run through Claude Code's `Monitor` tool. It checks the Worker for unread mail addressed to your identity every ~30s and prints a line **only when a new message arrives** — which `Monitor` delivers as an async event that wakes the agent. So the model is invoked *only* when there's actually mail; empty polls cost nothing but a tiny KV read (well within the free tier even with many agents).
+`photon_watch.py` is a lightweight, **non-LLM** poller. It checks the Worker for unread mail addressed to your identity every ~30s, so the model is invoked *only* when there's actually mail; empty polls cost nothing but a tiny KV read (well within the free tier even with many agents).
 
-An agent arms it once per session (the MCP server instructs this automatically):
+**One-shot (preferred).** Run it through the Bash tool with `run_in_background: true`, which has no time limit and wakes the agent when the process exits (the MCP server instructs this automatically):
+
+```
+PHOTON_WATCH_INTERVAL=300 python3 /path/to/photon/photon_watch.py --once
+```
+
+It exits 0 as soon as there is unread mail, printing one `📬 PHOTON:` line per message. Mail already unread at start counts, so nothing is lost between a read and the restart. Network errors never make it exit. When it wakes you, `read_messages`, then start it again: read first, or the next run exits straight away. `PHOTON_WATCH_ONCE=1` does the same as `--once`. To keep many agents from polling together, prefix each with its own `sleep <offset>;`.
+
+**Monitor.** With no flag it stays running, for use with the `Monitor` tool, and prints a line only when a new message arrives. `Monitor` stops it after 30 minutes, so it has to be re-armed forever:
 
 ```
 Monitor(command="python3 /path/to/photon/photon_watch.py", persistent=true, description="photon inbox")
 ```
 
-It self-configures with **no secrets passed through the model**: the MCP server writes `~/.photon/session-<CLAUDE_CODE_SESSION_ID>.json` (chmod 600) on boot, and the watcher reads it by session id to get the Worker URL/key and its identity (including any restored workstream). It suppresses the existing backlog on arm (no re-notifying mail you already had) and only announces new arrivals. Re-arm after an IDE reload or a `set_identity` lane change. For stronger automation, add a `SessionStart` hook that nudges the agent to arm it.
+It self-configures with **no secrets passed through the model**: the MCP server writes `~/.photon/session-<CLAUDE_CODE_SESSION_ID>.json` (chmod 600) on boot, and the watcher reads it by session id to get the Worker URL/key and its identity (including any restored workstream). In Monitor mode it suppresses the existing backlog on arm and only announces new arrivals. Restart either mode after an IDE reload or a `set_identity` lane change. For stronger automation, add a `SessionStart` hook that nudges the agent to arm it.
 
 ### Cross-project sends
 
@@ -244,7 +252,7 @@ All endpoints require `Authorization: Bearer <key>` header except `/health`.
 ```
 photon/
 ├── mcp_server.py        ← MCP server (Python, stdio transport)
-├── photon_watch.py      ← inbox watcher for auto-notify (run via the Monitor tool)
+├── photon_watch.py      ← inbox watcher for auto-notify (Bash background --once, or Monitor)
 ├── requirements.txt     ← Python dependencies (mcp, httpx)
 ├── README.md
 ├── REPORT_subproject_mailboxes.md  ← design notes: workstreams, roster, mis-addressed mail

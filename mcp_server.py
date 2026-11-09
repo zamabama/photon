@@ -161,7 +161,7 @@ _write_session_runtime()
 PROJECT_SEARCH_ROOTS = [Path.home() / "dev", Path.home() / "Documents"]
 PROJECT_SEARCH_MAX_DEPTH = 4
 
-# The inbox watcher that agents arm via the Monitor tool for auto-notification.
+# The inbox watcher that agents run in the background for auto-notification.
 # Sibling of this file, so the path is correct wherever the repo lives.
 WATCH_SCRIPT = str(Path(__file__).resolve().parent / "photon_watch.py")
 
@@ -184,14 +184,17 @@ mcp = FastMCP(
         "max_age_minutes= or since= only if you specifically want to narrow the window.\n"
         "\n"
         "## Auto-notify — arm your inbox watcher (recommended, once per session)\n"
-        "So you learn about new mail WITHOUT the user having to tell you to check, arm a background "
-        "watcher once at session start using the Monitor tool:\n"
-        f"    Monitor(command=\"python3 {WATCH_SCRIPT}\", persistent=true, description=\"photon inbox\")\n"
-        "It polls cheaply (no model cost) and emits an event — waking you — ONLY when a NEW message "
-        "addressed to your identity arrives; it stays silent otherwise and does not re-announce mail "
-        "you already had. When such an event arrives, read it with read_messages and act. Re-arm "
+        "So you learn about new mail WITHOUT the user having to tell you to check, start a background "
+        "watcher at session start with the Bash tool, run_in_background=true (no time limit):\n"
+        f"    python3 {WATCH_SCRIPT} --once\n"
+        "It polls cheaply (no model cost) and exits — waking you — as soon as you have unread mail, "
+        "including mail already waiting when it starts. When it wakes you, read the mail with "
+        "read_messages, act, then start it again; read first, or it exits straight away. Restart it "
         "after an IDE reload / MCP restart (a fresh session needs a fresh watcher). If you set or "
-        "change your workstream with set_identity, re-arm so the watcher follows your new lane.\n"
+        "change your workstream with set_identity, restart it so the watcher follows your new lane. "
+        "Set PHOTON_WATCH_INTERVAL=<seconds> to poll less often than the default 30. "
+        "Without --once it is a Monitor command instead, but Monitor stops after 30 minutes and must "
+        "be re-armed.\n"
         "\n"
         "## Sending to another project — you MUST resolve the project first\n"
         "When the user says 'send a photon message to the agent in charge of project X', "

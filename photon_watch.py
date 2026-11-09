@@ -1,12 +1,26 @@
 #!/usr/bin/env python3
-"""Photon inbox watcher — a cheap, non-LLM poller meant to run as a Monitor command.
+"""Photon inbox watcher — a cheap, non-LLM poller that wakes an agent when mail arrives.
 
-It polls the Photon Worker for UNREAD mail addressed to THIS agent's identity and
-prints one line per NEW message. Wired through Claude Code's Monitor tool, each of
-those lines becomes an async event that wakes the agent — so the model is only
-invoked when real mail actually arrives, never for empty polls.
+It polls the Photon Worker for UNREAD mail addressed to THIS agent's identity. The
+model is only invoked when real mail actually arrives, never for empty polls. Idle
+cost is a single authenticated GET every interval (default 30s) — featherweight.
 
-Idle cost is a single authenticated GET every interval (default 30s) — featherweight.
+Two ways to run it:
+
+  One-shot (--once or PHOTON_WATCH_ONCE=1) — preferred. Run it with Bash
+  run_in_background, which has no time limit and wakes the agent when the process
+  exits:
+      Bash(command="PHOTON_WATCH_INTERVAL=300 python3 photon_watch.py --once",
+           run_in_background=true)
+  It exits 0 as soon as there is unread mail, printing one line per message. Mail
+  already unread at start counts, so nothing is lost between a read and the restart.
+  Network errors never make it exit. When it wakes you: read_messages, then start it
+  again. Read first: unread mail makes the next run exit straight away. To stagger
+  many agents, prefix `sleep <offset>;`.
+
+  Monitor (default, no flag) — stays running and prints one line per NEW message,
+  each of which becomes an event. It stays silent about the backlog at start. The
+  Monitor tool caps a run at 30 minutes, so it has to be re-armed forever.
 
 Config resolution (so it "just works" in an agent's shell):
   - Worker URL / API key / machine / project: from env (BRIDGE_WORKER_URL,
@@ -17,10 +31,12 @@ Config resolution (so it "just works" in an agent's shell):
     CLAUDE_CODE_SESSION_ID in ~/.photon/claims.json — i.e. the exact identity the
     MCP server would use, including a restored lane.
 
-Env knobs: PHOTON_WATCH_INTERVAL (seconds, default 30), PHOTON_WATCH_IDENTITY.
+Env knobs: PHOTON_WATCH_INTERVAL (seconds, default 30), PHOTON_WATCH_IDENTITY,
+PHOTON_WATCH_ONCE (1 = one-shot, same as --once).
 """
 from __future__ import annotations
 
+import http.client
 import json
 import os
 import sys
@@ -90,7 +106,17 @@ def _fetch_unread(worker_url: str, api_key: str, identity: str) -> list:
         return json.loads(resp.read()).get("messages", [])
 
 
+def _announce(message: dict, identity: str) -> None:
+    frm = message.get("from", "?")
+    tags = ",".join(message.get("tags", []) or [])
+    preview = (message.get("content") or "").replace("\n", " ")[:160]
+    tagstr = f" [{tags}]" if tags else ""
+    print(f"📬 PHOTON: new message for {identity} from {frm}{tagstr} — {preview}",
+          flush=True)
+
+
 def main() -> int:
+    once = "--once" in sys.argv[1:] or os.environ.get("PHOTON_WATCH_ONCE") == "1"
     rt = _session_runtime()
     mcp_env = _mcp_photon_env()
 
@@ -110,8 +136,8 @@ def main() -> int:
         return 1
 
     identity = _resolve_identity(machine, project)
-    print(f"photon-watch armed for {identity} (every {interval}s) — will emit only on new mail",
-          flush=True)
+    until = "will exit on the first unread mail" if once else "will emit only on new mail"
+    print(f"photon-watch armed for {identity} (every {interval}s) — {until}", flush=True)
 
     seen: set[str] = set()
     first_pass = True
@@ -120,7 +146,8 @@ def main() -> int:
         try:
             messages = _fetch_unread(worker_url, api_key, identity)
             errors = 0
-        except (urllib.error.URLError, TimeoutError, ValueError, OSError) as exc:
+        except (urllib.error.URLError, http.client.HTTPException, TimeoutError,
+                ValueError, OSError) as exc:
             errors += 1
             # Surface a broken watcher instead of failing silently (silence reads as
             # "no mail"). Announce the first failure and then roughly every ~5 min.
@@ -128,6 +155,14 @@ def main() -> int:
                 reason = getattr(exc, "code", None) or type(exc).__name__
                 print(f"⚠️ photon-watch: cannot reach Photon for {identity} ({reason}) — "
                       f"retrying every {interval}s", flush=True)
+            time.sleep(interval)
+            continue
+
+        if once:
+            if messages:
+                for m in sorted(messages, key=lambda x: x.get("timestamp", "")):
+                    _announce(m, identity)
+                return 0
             time.sleep(interval)
             continue
 
@@ -144,12 +179,7 @@ def main() -> int:
             if not mid or mid in seen:
                 continue
             seen.add(mid)
-            frm = m.get("from", "?")
-            tags = ",".join(m.get("tags", []) or [])
-            preview = (m.get("content") or "").replace("\n", " ")[:160]
-            tagstr = f" [{tags}]" if tags else ""
-            print(f"📬 PHOTON: new message for {identity} from {frm}{tagstr} — {preview}",
-                  flush=True)
+            _announce(m, identity)
 
         time.sleep(interval)
 
