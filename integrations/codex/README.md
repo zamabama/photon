@@ -1,5 +1,12 @@
 # Codex desktop wake-up
 
+> **Idle wake-up failed on the tested Codex desktop host (22 November 2026).**
+> A real Photon event sent at 06:52 UTC was delivered into the chat only after
+> the user started a new turn around 11:10 UTC. The watcher process survived,
+> but the session-bound relay did not provide unattended wake-up. Do not deploy
+> this recipe as a working background notifier. Active-turn delivery and unit
+> tests are insufficient; this file is retained as experimental diagnostic code.
+
 Photon delivery, a running watcher, and a chat wake-up are three different things.
 The Claude Code `Bash(run_in_background=true)` recipe does **not** establish
 automatic wake-up in Codex. A detached shell printing a message is not sufficient.

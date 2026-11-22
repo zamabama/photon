@@ -139,8 +139,9 @@ Once configured, Claude Code gets these tools:
 `photon_watch.py` is a lightweight, **non-LLM** poller. It checks the Worker for unread mail addressed to your identity every ~30s. It only emits events; the host must connect them to its agent wake-up mechanism. Empty HTTP polls do not invoke a model.
 
 **Codex desktop:** the Bash background recipe below is Claude Code-specific. Use
-the [Codex event relay](integrations/codex/README.md) where the host supports a
-long-lived code-mode cell and the desktop chat-message tool. Test delivery into
+the [experimental Codex event relay](integrations/codex/README.md) only where the host supports a
+long-lived code-mode cell and the desktop chat-message tool. **The tested desktop
+host failed idle delivery; this is not currently a verified unattended solution.** Test delivery into
 the idle chat before claiming wake-up is active. A printed line, queued CLI
 message, or running watcher alone is not proof. App/runtime restarts require
 re-arming the session-bound relay.
