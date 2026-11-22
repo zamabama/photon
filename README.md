@@ -136,9 +136,16 @@ Once configured, Claude Code gets these tools:
 
 ### Auto-notify — get pinged when mail arrives (no manual "check photon")
 
-`photon_watch.py` is a lightweight, **non-LLM** poller. It checks the Worker for unread mail addressed to your identity every ~30s, so the model is invoked *only* when there's actually mail; empty polls cost nothing but a tiny KV read (well within the free tier even with many agents).
+`photon_watch.py` is a lightweight, **non-LLM** poller. It checks the Worker for unread mail addressed to your identity every ~30s. It only emits events; the host must connect them to its agent wake-up mechanism. Empty HTTP polls do not invoke a model.
 
-**One-shot (preferred).** Run it through the Bash tool with `run_in_background: true`, which has no time limit and wakes the agent when the process exits (the MCP server instructs this automatically):
+**Codex desktop:** the Bash background recipe below is Claude Code-specific. Use
+the [Codex event relay](integrations/codex/README.md) where the host supports a
+long-lived code-mode cell and the desktop chat-message tool. Test delivery into
+the idle chat before claiming wake-up is active. A printed line, queued CLI
+message, or running watcher alone is not proof. App/runtime restarts require
+re-arming the session-bound relay.
+
+**Claude Code one-shot (preferred).** Run it through the Bash tool with `run_in_background: true`, which has no time limit and wakes the agent when the process exits:
 
 ```
 PHOTON_WATCH_INTERVAL=300 python3 /path/to/photon/photon_watch.py --once

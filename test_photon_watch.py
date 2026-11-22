@@ -100,6 +100,15 @@ class Base(unittest.TestCase):
 
 
 class OnceMode(Base):
+    def test_structured_event_omits_message_content(self):
+        w = self.worker([[msg("event-id", "private payload must not reach relay")]])
+        code, out = finish(start(w, "--once", "--events"), 5)
+        self.assertEqual(code, 0, out)
+        events = [json.loads(line) for line in out.splitlines()]
+        self.assertEqual(events[0]["event"], "armed")
+        self.assertEqual(events[1], {"event": "mail", "identity": IDENTITY, "id": "event-id"})
+        self.assertNotIn("private payload", out)
+
     def test_mail_already_unread_at_start_exits_immediately(self):
         w = self.worker([[msg("a", "waiting")]])
         code, out = finish(start(w, "--once"), 5)

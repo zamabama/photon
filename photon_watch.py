@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""Photon inbox watcher — a cheap, non-LLM poller that wakes an agent when mail arrives.
+"""Photon inbox watcher — a cheap, non-LLM poller that emits mail-arrival events.
+
+Host integration is required to wake an agent. Claude Code's Bash background
+notifications and Codex's chat-message tool are different mechanisms; see
+integrations/codex/README.md. --events emits JSON with lane/message IDs only.
 
 It polls the Photon Worker for UNREAD mail addressed to THIS agent's identity. The
 model is only invoked when real mail actually arrives, never for empty polls. Idle
@@ -32,7 +36,7 @@ Config resolution (so it "just works" in an agent's shell):
     MCP server would use, including a restored lane.
 
 Env knobs: PHOTON_WATCH_INTERVAL (seconds, default 30), PHOTON_WATCH_IDENTITY,
-PHOTON_WATCH_ONCE (1 = one-shot, same as --once).
+PHOTON_WATCH_ONCE (1 = one-shot, same as --once), PHOTON_MCP_SERVER (config name).
 """
 from __future__ import annotations
 
@@ -67,7 +71,9 @@ def _mcp_photon_env() -> dict:
     proj_dir = os.environ.get("CLAUDE_PROJECT_DIR") or os.getcwd()
     try:
         cfg = json.loads((Path(proj_dir) / ".mcp.json").read_text())
-        return cfg.get("mcpServers", {}).get("photon", {}).get("env", {}) or {}
+        servers = cfg.get("mcpServers", {})
+        name = os.environ.get("PHOTON_MCP_SERVER", "photon")
+        return servers.get(name, {}).get("env", {}) or {}
     except (OSError, json.JSONDecodeError):
         return {}
 
@@ -107,6 +113,12 @@ def _fetch_unread(worker_url: str, api_key: str, identity: str) -> list:
 
 
 def _announce(message: dict, identity: str) -> None:
+    if "--events" in sys.argv[1:]:
+        # The relay needs IDs, never message content or credentials. The agent
+        # fetches the actual mail through its own authenticated Photon tool.
+        print(json.dumps({"event": "mail", "identity": identity,
+                          "id": message.get("id")}), flush=True)
+        return
     frm = message.get("from", "?")
     tags = ",".join(message.get("tags", []) or [])
     preview = (message.get("content") or "").replace("\n", " ")[:160]
@@ -137,7 +149,11 @@ def main() -> int:
 
     identity = _resolve_identity(machine, project)
     until = "will exit on the first unread mail" if once else "will emit only on new mail"
-    print(f"photon-watch armed for {identity} (every {interval}s) — {until}", flush=True)
+    if "--events" in sys.argv[1:]:
+        print(json.dumps({"event": "armed", "identity": identity,
+                          "interval": interval}), flush=True)
+    else:
+        print(f"photon-watch armed for {identity} (every {interval}s) — {until}", flush=True)
 
     seen: set[str] = set()
     first_pass = True
